@@ -45,17 +45,39 @@ class ObsCapture:
         except Exception:
             self._saved_video = None
         self._muted = []
+        self._temp_input = None
+        self.audio_note = None
         if game_audio_only:
+            # Desktop Audio is the whole PC mix — Discord conversations
+            # included. Mute mics AND desktop outputs, then add a temporary
+            # app-audio source locked to the iRacing process: game sound only.
+            DESKTOP_KINDS = ('wasapi_output_capture', 'coreaudio_output_capture',
+                             'pulse_output_capture')
             try:
                 for inp in self.client.get_input_list().inputs:
-                    if inp.get('inputKind') in self.MIC_KINDS:
+                    if inp.get('inputKind') in self.MIC_KINDS + DESKTOP_KINDS:
                         name = inp['inputName']
-                        was = self.client.get_input_mute(name).input_muted
-                        if not was:
+                        if not self.client.get_input_mute(name).input_muted:
                             self.client.set_input_mute(name, True)
                             self._muted.append(name)
             except Exception:
                 pass
+            try:
+                scene = self.client.get_current_program_scene().current_program_scene_name
+                name = "Director's Cut game audio"
+                self.client.create_input(
+                    scene, name, 'wasapi_process_output_capture',
+                    {'window': 'iRacing:SimWindow:iRacingSim64DX11.exe',
+                     'priority': 2},        # 2 = match by executable
+                    True)
+                self._temp_input = name
+                self.audio_note = ('Game-audio-only: desktop/mic sources muted, iRacing '
+                                   'app-audio source added for the session.')
+            except Exception as e:
+                self.audio_note = ('Muted mics + desktop audio, but could not add an '
+                                   f'iRacing app-audio source ({e}) — clips may be silent. '
+                                   'Add an Application Audio Capture source for iRacing '
+                                   'to your scene, or untick game-audio-only.')
 
     def cleanup(self):
         v = getattr(self, '_saved_video', None)
@@ -65,6 +87,11 @@ class ObsCapture:
                     numerator=v.fps_numerator, denominator=v.fps_denominator,
                     base_width=v.base_width, base_height=v.base_height,
                     out_width=v.output_width, out_height=v.output_height)
+            except Exception:
+                pass
+        if getattr(self, '_temp_input', None):
+            try:
+                self.client.remove_input(self._temp_input)
             except Exception:
                 pass
         for name in getattr(self, '_muted', []):

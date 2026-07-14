@@ -33,8 +33,10 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
     replay_end_t = timeline[-1]['t']
     clips = []
     capture.prepare(game_audio_only=game_audio_only)
-    if getattr(capture, 'mic_warning', None) and progress:
-        progress(0, len(highlights), capture.mic_warning)
+    for note_attr in ('mic_warning', 'audio_note'):
+        note = getattr(capture, note_attr, None)
+        if note and progress:
+            progress(0, len(highlights), note)
     prior_ui = sim.hide_ui() if hide_ui else None
     for i, h in enumerate(highlights):
         if stop_flag is not None and stop_flag():
