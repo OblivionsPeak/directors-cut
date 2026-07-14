@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Director's Cut — Highlight Reels</title>
+<link rel="icon" type="image/png" href="/static/icon.png">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">DIRECTOR'S<b>CUT</b></span>
+    <span class="tag">automatic highlight reels &middot; Operation Motorsport</span>
+  </div>
+  <span id="sim-status" class="pill">checking sim…</span>
+</header>
+
+<main>
+  <section class="panel" id="step1">
+    <h2><span class="step">1</span> Open your replay in iRacing</h2>
+    <p class="dim">Load the replay (Results &rarr; Watch, or a saved .rpy) and leave the sim on screen.
+    Director's Cut drives the replay and cameras for you — don't touch the sim while it works.</p>
+  </section>
+
+  <section class="panel" id="step2">
+    <h2><span class="step">2</span> Scan for highlights</h2>
+    <div class="row">
+      <label>Scan speed
+        <select id="scan-speed">
+          <option value="8">8× (thorough)</option>
+          <option value="16" selected>16× (recommended)</option>
+        </select>
+      </label>
+      <button id="btn-scan" class="primary">Scan replay</button>
+      <button id="btn-stop" hidden>Stop</button>
+    </div>
+    <div id="scan-progress" class="progress" hidden><div class="bar"></div><span class="ptext"></span></div>
+  </section>
+
+  <section class="panel" id="step3" hidden>
+    <h2><span class="step">3</span> Pick your highlights</h2>
+    <div class="row">
+      <label>Focus
+        <select id="focus"><option value="all">Whole field (broadcast)</option></select>
+      </label>
+      <label>Capture with
+        <select id="capture">
+          <option value="obs">OBS Studio (websocket)</option>
+          <option value="sim">iRacing built-in recorder</option>
+        </select>
+      </label>
+      <label id="obs-pass-wrap">OBS password
+        <input id="obs-password" type="password" placeholder="(blank if none)">
+      </label>
+    </div>
+    <div id="highlight-list"></div>
+    <div class="row">
+      <button id="btn-record" class="primary">Record selected &amp; build reel</button>
+    </div>
+    <div id="rec-progress" class="progress" hidden><div class="bar"></div><span class="ptext"></span></div>
+  </section>
+
+  <section class="panel done" id="step4" hidden>
+    <h2>🎬 Reel ready</h2>
+    <p id="reel-path" class="mono"></p>
+    <button id="btn-folder">Open folder</button>
+  </section>
+
+  <div id="error" hidden></div>
+</main>
+
+<footer>Runs 100% locally against the iRacing SDK — no web APIs, no accounts, nothing uploaded.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

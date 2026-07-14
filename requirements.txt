@@ -1,0 +1,4 @@
+flask
+pyirsdk
+obsws-python
+imageio-ffmpeg
