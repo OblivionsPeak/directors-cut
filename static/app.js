@@ -64,6 +64,9 @@ async function poll() {
       recProg.querySelector('.bar').style.width = `${(job.progress * 100).toFixed(0)}%`;
       recProg.querySelector('.ptext').textContent = job.message;
     }
+    const log = $('#rec-log');
+    log.hidden = !(job.log && job.log.length);
+    if (!log.hidden) log.textContent = job.log.join('\n');
     $('#btn-record').disabled = busy;
 
     if (job.phase !== lastPhase) {
@@ -113,5 +116,17 @@ $('#btn-record').onclick = async () => {
 };
 
 $('#btn-folder').onclick = () => api('/api/open-folder', {});
+
+$('#btn-test-capture').onclick = async () => {
+  const out = $('#capture-test-result');
+  out.hidden = false;
+  out.textContent = 'Recording a 4-second test…';
+  const r = await api('/api/capture-test', {
+    capture: $('#capture').value,
+    obs_password: $('#obs-password').value,
+  });
+  out.textContent = (r.ok ? '✔ ' : '✘ ') + r.detail;
+  out.style.color = r.ok ? '#3fb950' : '#e5484d';
+};
 
 poll();

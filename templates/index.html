@@ -53,12 +53,15 @@
       <label id="obs-pass-wrap">OBS password
         <input id="obs-password" type="password" placeholder="(blank if none)">
       </label>
+      <button id="btn-test-capture">Test capture (4s)</button>
     </div>
+    <p id="capture-test-result" class="dim" hidden></p>
     <div id="highlight-list"></div>
     <div class="row">
       <button id="btn-record" class="primary">Record selected &amp; build reel</button>
     </div>
     <div id="rec-progress" class="progress" hidden><div class="bar"></div><span class="ptext"></span></div>
+    <pre id="rec-log" class="mono" style="color:#8b949e" hidden></pre>
   </section>
 
   <section class="panel done" id="step4" hidden>

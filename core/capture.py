@@ -26,23 +26,71 @@ class ObsCapture:
             return False, ('Could not reach OBS. Open OBS, then Tools > WebSocket Server '
                            f'Settings > Enable. ({e})')
 
+    def prepare(self):
+        """Drop OBS output resolution to 1080p for the recording session.
+
+        Big canvases (triples) exceed NVENC H264's max frame size — OBS then
+        accepts StartRecord but the encoder silently never starts. The reel is
+        normalized to 1080p anyway. Original settings restored by cleanup()."""
+        try:
+            v = self.client.get_video_settings()
+            self._saved_video = v
+            if v.output_width > 1920 or v.output_height > 1080:
+                self.client.set_video_settings(
+                    numerator=v.fps_numerator, denominator=v.fps_denominator,
+                    base_width=v.base_width, base_height=v.base_height,
+                    out_width=1920, out_height=1080)
+        except Exception:
+            self._saved_video = None
+
+    def cleanup(self):
+        v = getattr(self, '_saved_video', None)
+        if v is not None:
+            try:
+                self.client.set_video_settings(
+                    numerator=v.fps_numerator, denominator=v.fps_denominator,
+                    base_width=v.base_width, base_height=v.base_height,
+                    out_width=v.output_width, out_height=v.output_height)
+            except Exception:
+                pass
+
     def start(self):
+        self._t_start = time.time()
         self.client.start_record()
+        # verify the output actually went active — StartRecord can accept the
+        # request yet fail to start (no encoder, disk error, bad settings)
+        for _ in range(12):
+            time.sleep(0.25)
+            try:
+                if self.client.get_record_status().output_active:
+                    return
+            except Exception:
+                pass
+        raise RuntimeError(
+            'OBS accepted the record request but recording never started. Most common '
+            'cause on big/triple-monitor canvases: the H.264 encoder rejects frames wider '
+            'than 4096px. Fix in OBS: Settings > Video > Output (Scaled) Resolution = '
+            '1920x1080, or Settings > Output > Recording > Video Encoder = NVENC HEVC/AV1. '
+            'Then use the Test capture button to confirm.')
+
+    VIDEO_EXTS = ('.mp4', '.mkv', '.mov', '.flv', '.ts', '.m4v')
 
     def stop(self):
-        # returns the recorded file path (OBS 28+)
+        path = None
         try:
             resp = self.client.stop_record()
             path = getattr(resp, 'output_path', None)
         except Exception:
             path = None
-        if path:
+        if path and os.path.exists(path):
             return path
-        # fallback: newest file in the OBS record directory
+        # fallback: newest VIDEO file created after start() in the record dir
         try:
             rd = self.client.get_record_directory().record_directory
-            files = sorted(glob.glob(os.path.join(rd, '*.*')), key=os.path.getmtime)
-            return files[-1] if files else None
+            vids = [f for f in glob.glob(os.path.join(rd, '*.*'))
+                    if f.lower().endswith(self.VIDEO_EXTS)
+                    and os.path.getmtime(f) >= getattr(self, '_t_start', 0)]
+            return max(vids, key=os.path.getmtime) if vids else None
         except Exception:
             return None
 
@@ -54,16 +102,42 @@ class SimCapture:
 
     def __init__(self, sim):
         self.sim = sim
-        self.video_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'iRacing', 'videos')
+        docs = os.path.join(os.path.expanduser('~'), 'Documents', 'iRacing')
+        self.video_dir = os.path.join(docs, 'videos')
+        self.app_ini = os.path.join(docs, 'app.ini')
         self._before = set()
+
+    def _capture_enabled(self):
+        """iRacing silently ignores the record broadcast unless
+        [Misc] videoCaptureEnable=1 is set in app.ini."""
+        try:
+            with open(self.app_ini, encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    key = line.split(';')[0].strip()
+                    if key.lower().startswith('videocaptureenable'):
+                        return key.split('=')[1].strip() == '1'
+        except OSError:
+            return None
+        return False    # key absent = disabled
 
     def available(self):
         if not self.sim.connected:
             return False, 'iRacing is not running.'
+        enabled = self._capture_enabled()
+        if enabled is False:
+            return False, ('iRacing video capture is DISABLED — the sim silently ignores '
+                           'record commands. Fix: close iRacing, open Documents\\iRacing\\app.ini, '
+                           'set videoCaptureEnable=1 under [Misc] (add the line if missing), '
+                           'restart the sim. Or switch to the OBS option above.')
         if not os.path.isdir(self.video_dir):
-            return False, (f'{self.video_dir} does not exist — enable video capture in '
-                           'iRacing (Options > Misc) and record once manually to create it.')
+            os.makedirs(self.video_dir, exist_ok=True)
         return True, 'iRacing built-in capture ready'
+
+    def prepare(self):
+        pass
+
+    def cleanup(self):
+        pass
 
     def start(self):
         self._before = set(glob.glob(os.path.join(self.video_dir, '*.*')))

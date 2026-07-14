@@ -30,7 +30,7 @@ app = Flask(__name__, template_folder=resource_path('templates'),
 
 sim = Sim()
 JOB = {'phase': 'idle', 'progress': 0.0, 'message': '', 'error': None,
-       'highlights': [], 'clips': [], 'reel': None, 'stop': False}
+       'highlights': [], 'clips': [], 'reel': None, 'stop': False, 'log': []}
 TIMELINE = []
 LOCK = threading.Lock()
 
@@ -112,14 +112,21 @@ def record():
     if not ok:
         return jsonify({'error': reason}), 400
 
+    def log_progress(i, n, msg):
+        with LOCK:
+            JOB['progress'] = i / max(n, 1)
+            JOB['message'] = msg
+            JOB['log'].append(msg)
+            JOB['log'] = JOB['log'][-30:]
+
     def run():
         set_job(phase='recording', progress=0.0, message='Recording highlights…',
-                error=None, clips=[], reel=None, stop=False)
+                error=None, clips=[], reel=None, stop=False, log=[])
         try:
             drivers = sim.drivers()
             clips = director.record_highlights(
                 sim, TIMELINE, picked, cap, drivers,
-                progress=lambda i, n, msg: set_job(progress=i / max(n, 1), message=msg),
+                progress=log_progress,
                 stop_flag=lambda: JOB['stop'])
             set_job(phase='cutting', message='Building the reel…', clips=clips)
             reel, err = cutter.build_reel(
@@ -134,6 +141,38 @@ def record():
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'ok': True})
+
+
+@app.post('/api/capture-test')
+def capture_test():
+    """Record ~4 seconds right now and report exactly what happened."""
+    body = request.json
+    if body.get('capture') == 'obs':
+        cap = ObsCapture(password=body.get('obs_password', ''))
+    else:
+        cap = SimCapture(sim)
+    ok, reason = cap.available()
+    if not ok:
+        return jsonify({'ok': False, 'detail': reason})
+    import time as _t
+    try:
+        cap.prepare()
+        cap.start()
+        _t.sleep(4)
+        path = cap.stop()
+        cap.cleanup()
+    except Exception as e:
+        try:
+            cap.cleanup()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'detail': f'Capture failed: {e}'})
+    if path and os.path.exists(path):
+        return jsonify({'ok': True,
+                        'detail': f'Recorded {os.path.getsize(path) // 1024} KB to {path} — capture works.'})
+    return jsonify({'ok': False,
+                    'detail': 'Recording ran but no video file appeared. For the iRacing recorder, '
+                              'confirm videoCaptureEnable=1 in app.ini and that the sim is running.'})
 
 
 @app.post('/api/stop')

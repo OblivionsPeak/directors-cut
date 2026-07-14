@@ -31,6 +31,7 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
     num_by_idx = {d['idx']: d['number'] for d in drivers}
     replay_end_t = timeline[-1]['t']
     clips = []
+    capture.prepare()
     for i, h in enumerate(highlights):
         if stop_flag is not None and stop_flag():
             break
@@ -61,6 +62,7 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
         elif progress:
             progress(i + 1, len(highlights), f"No video file for: {h['label']} — check the capture backend")
         time.sleep(1.0)
+    capture.cleanup()
     if progress:
         progress(len(highlights), len(highlights), 'Recording complete')
     return clips
