@@ -13,10 +13,12 @@ import webbrowser
 from flask import Flask, jsonify, render_template, request
 
 from core.sdk import Sim
-from core import scanner, events, director, cutter
+from core import scanner, events, director, cutter, updater
 from core.capture import ObsCapture, SimCapture
 
+APP_VERSION = 'v0.3.0'
 PORT = 4795
+UPDATE = {'available': None, 'state': 'idle'}
 OUT_DIR = os.path.join(os.path.expanduser('~'), 'Videos', 'DirectorsCut')
 
 
@@ -53,7 +55,8 @@ def status():
     with LOCK:
         job = dict(JOB)
     return jsonify({'connected': connected, 'drivers': drivers,
-                    'cameras': cameras, 'out_dir': OUT_DIR, 'job': job})
+                    'cameras': cameras, 'out_dir': OUT_DIR, 'job': job,
+                    'version': APP_VERSION, 'update': UPDATE})
 
 
 @app.post('/api/scan')
@@ -185,6 +188,23 @@ def capture_test():
                               'confirm videoCaptureEnable=1 in app.ini and that the sim is running.'})
 
 
+@app.post('/api/update')
+def do_update():
+    if not UPDATE['available']:
+        return jsonify({'error': 'No update available.'}), 400
+    if JOB['phase'] in ('scanning', 'recording', 'cutting'):
+        return jsonify({'error': 'Finish or stop the current job first.'}), 409
+    try:
+        UPDATE['state'] = 'downloading'
+        updater.apply(UPDATE['available']['url'])
+    except Exception as e:
+        UPDATE['state'] = 'idle'
+        return jsonify({'error': f'Update failed: {e}'}), 500
+    UPDATE['state'] = 'restarting'
+    threading.Timer(1.5, lambda: os._exit(0)).start()   # let the response flush
+    return jsonify({'ok': True})
+
+
 @app.post('/api/stop')
 def stop():
     set_job(stop=True, message='Stopping…')
@@ -214,9 +234,17 @@ def open_browser():
     webbrowser.open(f'http://localhost:{PORT}')
 
 
+def check_updates():
+    info = updater.check(APP_VERSION)
+    if info:
+        UPDATE['available'] = info
+
+
 if __name__ == '__main__':
     if already_running():
         open_browser()
         sys.exit(0)
+    updater.cleanup_old()
+    threading.Thread(target=check_updates, daemon=True).start()
     threading.Timer(1.0, open_browser).start()
     app.run(host='127.0.0.1', port=PORT, debug=False)

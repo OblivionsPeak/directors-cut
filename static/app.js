@@ -46,6 +46,19 @@ async function poll() {
     pill.className = 'pill ' + (st.connected ? 'ok' : 'bad');
 
     if (st.cameras && st.cameras.length) CAMERAS = st.cameras;
+    const ub = $('#update-banner');
+    if (st.update && st.update.state === 'restarting') {
+      ub.hidden = false; ub.textContent = 'Updating — restarting…'; ub.className = 'pill ok';
+    } else if (st.update && st.update.available) {
+      ub.hidden = false; ub.className = 'pill ok';
+      ub.textContent = `⬆ Update to ${st.update.available.version}`;
+      ub.onclick = async () => {
+        ub.textContent = 'Downloading update…';
+        const r = await api('/api/update', {});
+        if (r.error) { ub.textContent = '⬆ Update failed — see error'; showError(r.error); }
+        else { ub.textContent = 'Restarting — reload this page in ~10s'; }
+      };
+    }
     const focus = $('#focus');
     if (st.drivers.length && focus.options.length <= 1) {
       for (const d of st.drivers) {
