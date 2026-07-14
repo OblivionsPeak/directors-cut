@@ -241,7 +241,15 @@ def check_updates():
 
 
 if __name__ == '__main__':
-    if already_running():
+    if os.environ.get('DC_RELAUNCH'):
+        # fresh instance spawned by the updater: the old one is dying — wait
+        # for the port to free instead of concluding we're a duplicate
+        import time as _t
+        for _ in range(30):
+            if not already_running():
+                break
+            _t.sleep(0.5)
+    elif already_running():
         open_browser()
         sys.exit(0)
     updater.cleanup_old()

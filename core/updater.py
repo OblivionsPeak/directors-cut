@@ -84,13 +84,21 @@ def apply(url):
 
     pid = os.getpid()
     script = os.path.join(tempfile.gettempdir(), 'directorscut-update.bat')
+    log = os.path.join(tempfile.gettempdir(), 'directorscut-update.log')
+    # DC_RELAUNCH tells the new instance to wait for the port instead of
+    # treating a dying predecessor as "already running" and exiting
     with open(script, 'w', encoding='ascii') as f:
         f.write(f'''@echo off
+echo %date% %time% updater started > "{log}"
 :wait
 tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && (timeout /t 1 /nobreak >nul & goto wait)
-move /y "{exe}" "{exe}.old" >nul
-move /y "{new_path}" "{exe}" >nul
+timeout /t 2 /nobreak >nul
+echo %date% %time% old process gone, swapping >> "{log}"
+move /y "{exe}" "{exe}.old" >> "{log}" 2>&1
+move /y "{new_path}" "{exe}" >> "{log}" 2>&1
+set DC_RELAUNCH=1
 start "" "{exe}"
+echo %date% %time% relaunched, exit code %errorlevel% >> "{log}"
 del "%~f0"
 ''')
     subprocess.Popen(['cmd', '/c', script],
