@@ -26,12 +26,14 @@ class ObsCapture:
             return False, ('Could not reach OBS. Open OBS, then Tools > WebSocket Server '
                            f'Settings > Enable. ({e})')
 
-    def prepare(self):
-        """Drop OBS output resolution to 1080p for the recording session.
+    MIC_KINDS = ('wasapi_input_capture', 'dshow_input', 'coreaudio_input_capture',
+                 'pulse_input_capture')
 
-        Big canvases (triples) exceed NVENC H264's max frame size — OBS then
-        accepts StartRecord but the encoder silently never starts. The reel is
-        normalized to 1080p anyway. Original settings restored by cleanup()."""
+    def prepare(self, game_audio_only=False):
+        """Session setup, restored by cleanup():
+        - drop OBS output to 1080p (big/triple canvases exceed NVENC H264's max
+          frame size — StartRecord is accepted but the encoder never starts)
+        - optionally mute microphone inputs so clips carry no voice audio."""
         try:
             v = self.client.get_video_settings()
             self._saved_video = v
@@ -42,6 +44,18 @@ class ObsCapture:
                     out_width=1920, out_height=1080)
         except Exception:
             self._saved_video = None
+        self._muted = []
+        if game_audio_only:
+            try:
+                for inp in self.client.get_input_list().inputs:
+                    if inp.get('inputKind') in self.MIC_KINDS:
+                        name = inp['inputName']
+                        was = self.client.get_input_mute(name).input_muted
+                        if not was:
+                            self.client.set_input_mute(name, True)
+                            self._muted.append(name)
+            except Exception:
+                pass
 
     def cleanup(self):
         v = getattr(self, '_saved_video', None)
@@ -51,6 +65,11 @@ class ObsCapture:
                     numerator=v.fps_numerator, denominator=v.fps_denominator,
                     base_width=v.base_width, base_height=v.base_height,
                     out_width=v.output_width, out_height=v.output_height)
+            except Exception:
+                pass
+        for name in getattr(self, '_muted', []):
+            try:
+                self.client.set_input_mute(name, False)
             except Exception:
                 pass
 
@@ -133,8 +152,20 @@ class SimCapture:
             os.makedirs(self.video_dir, exist_ok=True)
         return True, 'iRacing built-in capture ready'
 
-    def prepare(self):
-        pass
+    def prepare(self, game_audio_only=False):
+        # the sim recorder mixes mic audio only when videoCaptureMic=1; warn if
+        # the user asked for game-only audio but the sim will record the mic
+        self.mic_warning = None
+        if game_audio_only:
+            try:
+                with open(self.app_ini, encoding='utf-8', errors='replace') as f:
+                    for line in f:
+                        key = line.split(';')[0].strip()
+                        if key.lower().startswith('videocapturemic') and key.split('=')[1].strip() == '1':
+                            self.mic_warning = ('iRacing has videoCaptureMic=1 — clips will include '
+                                                'your microphone. Set it to 0 in app.ini (sim closed).')
+            except OSError:
+                pass
 
     def cleanup(self):
         pass

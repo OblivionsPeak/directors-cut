@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 
 let lastPhase = '';
+let CAMERAS = [];
 
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : {
@@ -17,6 +18,11 @@ function fmtT(t) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function camOptions() {
+  return '<option value="auto">Auto camera</option>' +
+    CAMERAS.map(c => `<option value="${c.num}">${c.name}</option>`).join('');
+}
+
 function renderHighlights(hl) {
   const L = $('#highlight-list'); L.innerHTML = '';
   if (!hl.length) { L.innerHTML = '<p class="dim">No highlights detected for this focus.</p>'; return; }
@@ -26,6 +32,7 @@ function renderHighlights(hl) {
     row.innerHTML = `<input type="checkbox" checked data-i="${i}">
       <span class="type ${h.type}">${h.type}</span>
       <span class="label">${h.label}</span>
+      <select class="cam" data-i="${i}" title="Camera for this clip">${camOptions()}</select>
       <span class="when">lap ${h.lap ?? '?'} · ${fmtT(Math.max(0, h.t_start))}–${fmtT(h.t_end)} · ${(h.t_end - h.t_start).toFixed(0)}s</span>`;
     L.appendChild(row);
   });
@@ -38,6 +45,7 @@ async function poll() {
     pill.textContent = st.connected ? 'iRacing connected' : 'iRacing not running';
     pill.className = 'pill ' + (st.connected ? 'ok' : 'bad');
 
+    if (st.cameras && st.cameras.length) CAMERAS = st.cameras;
     const focus = $('#focus');
     if (st.drivers.length && focus.options.length <= 1) {
       for (const d of st.drivers) {
@@ -107,10 +115,14 @@ $('#btn-record').onclick = async () => {
   showError(null);
   const selected = [...document.querySelectorAll('#highlight-list input:checked')]
     .map(x => parseInt(x.dataset.i, 10));
+  const cams = {};
+  document.querySelectorAll('#highlight-list select.cam').forEach(s => { cams[s.dataset.i] = s.value; });
   const r = await api('/api/record', {
-    selected,
+    selected, cams,
     capture: $('#capture').value,
     obs_password: $('#obs-password').value,
+    hide_ui: $('#opt-hide-ui').checked,
+    game_audio_only: $('#opt-game-audio').checked,
   });
   if (r.error) showError(r.error);
 };

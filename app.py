@@ -49,10 +49,11 @@ def index():
 def status():
     connected = sim.connect()
     drivers = sim.drivers() if connected else []
+    cameras = sim.camera_groups() if connected else []
     with LOCK:
         job = dict(JOB)
     return jsonify({'connected': connected, 'drivers': drivers,
-                    'out_dir': OUT_DIR, 'job': job})
+                    'cameras': cameras, 'out_dir': OUT_DIR, 'job': job})
 
 
 @app.post('/api/scan')
@@ -99,8 +100,15 @@ def record():
     if not TIMELINE:
         return jsonify({'error': 'Scan a replay first.'}), 400
     body = request.json
-    picked = [JOB['highlights'][i] for i in body.get('selected', [])
-              if 0 <= i < len(JOB['highlights'])]
+    cams = body.get('cams') or {}
+    picked = []
+    for i in body.get('selected', []):
+        if 0 <= i < len(JOB['highlights']):
+            h = dict(JOB['highlights'][i])
+            cam = cams.get(str(i))
+            if cam not in (None, '', 'auto'):
+                h['cam_group'] = int(cam)
+            picked.append(h)
     if not picked:
         return jsonify({'error': 'Select at least one highlight.'}), 400
 
@@ -127,7 +135,9 @@ def record():
             clips = director.record_highlights(
                 sim, TIMELINE, picked, cap, drivers,
                 progress=log_progress,
-                stop_flag=lambda: JOB['stop'])
+                stop_flag=lambda: JOB['stop'],
+                hide_ui=bool(body.get('hide_ui', True)),
+                game_audio_only=bool(body.get('game_audio_only', True)))
             set_job(phase='cutting', message='Building the reel…', clips=clips)
             reel, err = cutter.build_reel(
                 clips, OUT_DIR,

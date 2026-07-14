@@ -25,19 +25,23 @@ def sim_time_to_frame(timeline, t):
 
 
 def record_highlights(sim, timeline, highlights, capture, drivers,
-                      progress=None, stop_flag=None):
+                      progress=None, stop_flag=None, hide_ui=True, game_audio_only=True):
     """Play each highlight in real time while the capture backend records.
-    Returns list of {highlight, file} clips."""
+    Returns list of {highlight, file} clips. A highlight may carry
+    'cam_group' (int) to override the automatic type-based camera pick."""
     num_by_idx = {d['idx']: d['number'] for d in drivers}
     replay_end_t = timeline[-1]['t']
     clips = []
-    capture.prepare()
+    capture.prepare(game_audio_only=game_audio_only)
+    if getattr(capture, 'mic_warning', None) and progress:
+        progress(0, len(highlights), capture.mic_warning)
+    prior_ui = sim.hide_ui() if hide_ui else None
     for i, h in enumerate(highlights):
         if stop_flag is not None and stop_flag():
             break
         if progress:
             progress(i, len(highlights), f"Recording: {h['label']}")
-        group = sim.pick_camera_group(CAM_PREFS.get(h['type'], ['TV', 'Chase']))
+        group = h.get('cam_group') or sim.pick_camera_group(CAM_PREFS.get(h['type'], ['TV', 'Chase']))
         frame = sim_time_to_frame(timeline, max(0, h['t_start']))
 
         sim.set_speed(0)
@@ -62,6 +66,8 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
         elif progress:
             progress(i + 1, len(highlights), f"No video file for: {h['label']} — check the capture backend")
         time.sleep(1.0)
+    if hide_ui:
+        sim.restore_ui(prior_ui)
     capture.cleanup()
     if progress:
         progress(len(highlights), len(highlights), 'Recording complete')

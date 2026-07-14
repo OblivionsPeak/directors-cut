@@ -71,6 +71,24 @@ class Sim:
         return self.get('ReplaySessionTime')
 
     # ── cameras ──────────────────────────────────────────────────────────────
+    def hide_ui(self):
+        """Hide the sim's replay UI overlays for clean footage. Returns the
+        prior camera state so it can be restored."""
+        try:
+            prior = self.get('CamCameraState') or 0
+            self.ir.cam_set_state(int(prior) | irsdk.CameraState.ui_hidden)
+            return prior
+        except Exception:
+            return None
+
+    def restore_ui(self, prior):
+        if prior is None:
+            return
+        try:
+            self.ir.cam_set_state(int(prior) & ~irsdk.CameraState.ui_hidden)
+        except Exception:
+            pass
+
     def watch(self, car_number, group):
         # cam_switch_num wants the car NUMBER string; falls back to position 1
         try:
