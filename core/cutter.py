@@ -13,8 +13,11 @@ def ffmpeg_exe():
 
 
 def _run(args):
+    # CREATE_NO_WINDOW: in a windowless (PyInstaller --noconsole) app, child
+    # processes otherwise flash a blank console per ffmpeg invocation
     return subprocess.run([ffmpeg_exe(), '-y', '-hide_banner', '-loglevel', 'error'] + args,
-                          capture_output=True, text=True, timeout=1800)
+                          capture_output=True, text=True, timeout=1800,
+                          creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 
 
 def build_reel(clips, out_dir, title='Race Highlights', progress=None):
