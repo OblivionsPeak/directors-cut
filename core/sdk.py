@@ -86,11 +86,27 @@ class Sim:
         self.ir.video_capture(irsdk.VideoCaptureMode.end_video_capture)
 
     def wait_until_sim_time(self, target, timeout=600, poll=0.2):
-        """Block until replay playback passes `target` sim seconds."""
+        """Block until replay playback passes `target` sim seconds.
+
+        Must re-freeze each poll: the scan pass leaves the var buffer frozen,
+        and an unfrozen read would return that stale snapshot forever.
+        """
         t0 = time.time()
         while time.time() - t0 < timeout:
+            self.freeze()
             now = self.session_time()
             if now is not None and now >= target:
+                return True
+            time.sleep(poll)
+        return False
+
+    def wait_until_frame(self, target_frame, timeout=10, poll=0.2, slack=180):
+        """Block until the replay has actually seeked near `target_frame`."""
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            self.freeze()
+            f = self.frame_now()
+            if f is not None and abs(f - target_frame) <= slack:
                 return True
             time.sleep(poll)
         return False

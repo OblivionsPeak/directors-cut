@@ -29,6 +29,7 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
     """Play each highlight in real time while the capture backend records.
     Returns list of {highlight, file} clips."""
     num_by_idx = {d['idx']: d['number'] for d in drivers}
+    replay_end_t = timeline[-1]['t']
     clips = []
     for i, h in enumerate(highlights):
         if stop_flag is not None and stop_flag():
@@ -40,17 +41,25 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
 
         sim.set_speed(0)
         sim.seek_frame(frame)
-        time.sleep(1.5)                                  # let the sim load the frame
+        sim.wait_until_frame(frame)                      # seek is asynchronous
+        time.sleep(0.5)
         sim.watch(num_by_idx.get(h['caridx'], '0'), group)
         time.sleep(0.8)
 
+        # never wait for a target past the end of the replay — playback
+        # stops there and the wait would only time out
+        target = min(h['t_end'], replay_end_t - 0.5)
         capture.start()
         sim.set_speed(1)
-        ok = sim.wait_until_sim_time(h['t_end'], timeout=(h['t_end'] - h['t_start']) + 60)
+        ok = sim.wait_until_sim_time(target, timeout=(target - h['t_start']) + 60)
         sim.set_speed(0)
         path = capture.stop()
-        if path and ok:
-            clips.append({'highlight': h, 'file': path})
+        # keep the clip whenever a file exists — a wait timeout just means
+        # the clip may run long, which the cutter tolerates
+        if path:
+            clips.append({'highlight': h, 'file': path, 'timed_out': not ok})
+        elif progress:
+            progress(i + 1, len(highlights), f"No video file for: {h['label']} — check the capture backend")
         time.sleep(1.0)
     if progress:
         progress(len(highlights), len(highlights), 'Recording complete')
