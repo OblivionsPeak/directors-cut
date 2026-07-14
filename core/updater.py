@@ -97,11 +97,18 @@ echo %date% %time% old process gone, swapping >> "{log}"
 move /y "{exe}" "{exe}.old" >> "{log}" 2>&1
 move /y "{new_path}" "{exe}" >> "{log}" 2>&1
 set DC_RELAUNCH=1
-start "" "{exe}"
-echo %date% %time% relaunched, exit code %errorlevel% >> "{log}"
+echo %date% %time% launching >> "{log}"
+"{exe}" >> "{log}" 2>&1
+echo %date% %time% app exited with %errorlevel% >> "{log}"
 del "%~f0"
 ''')
+    # Strip PyInstaller runtime vars: the relaunched EXE would otherwise
+    # resolve its libraries against THIS process's extraction dir, which is
+    # deleted on exit (crashes with missing package metadata).
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(('_MEI', '_PYI', 'PYINSTALLER'))}
+    env['DC_RELAUNCH'] = '1'
     subprocess.Popen(['cmd', '/c', script],
                      creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
                      | getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-                     close_fds=True)
+                     close_fds=True, env=env)
