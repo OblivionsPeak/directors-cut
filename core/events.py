@@ -32,6 +32,13 @@ def detect(timeline, focus_caridx=None, max_highlights=12):
     if focus_caridx is not None:
         events = [e for e in events
                   if e['caridx'] == focus_caridx or focus_caridx in e.get('involved', [])]
+        # single-driver reel: the camera must follow the focused driver even
+        # when the event was attributed to the other car (they got passed,
+        # they're defending in the battle, etc.)
+        for e in events:
+            if e['caridx'] != focus_caridx:
+                e['involved'] = [e['caridx']]
+                e['caridx'] = focus_caridx
 
     events = _merge_overlaps(events)
     events.sort(key=lambda e: -e['score'])

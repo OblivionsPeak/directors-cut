@@ -80,8 +80,16 @@ def main():
 
     # focus filter: car 3 focus should keep the incident, drop the P1 overtake
     hl3 = events.detect(tl, focus_caridx=3)
-    assert all(h['caridx'] == 3 or 3 in h.get('involved', []) for h in hl3), 'focus filter leaked'
+    assert all(h['caridx'] == 3 for h in hl3), \
+        'focused reel must aim every camera at the focused driver'
     assert any(h['type'] == 'incident' for h in hl3), 'focused incident lost'
+
+    # focus on car 1 (the car that got passed): every camera aims at car 1 and
+    # the pass moment (t=140) is covered — possibly merged into the battle clip
+    hl1 = events.detect(tl, focus_caridx=1)
+    assert all(h['caridx'] == 1 for h in hl1), 'camera target not refocused'
+    assert any(h['t_start'] <= 140 <= h['t_end'] for h in hl1), \
+        'pass moment not covered when focusing the passed car'
 
     # frame interpolation sanity
     from core.director import sim_time_to_frame

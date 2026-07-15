@@ -16,7 +16,7 @@ from core.sdk import Sim
 from core import scanner, events, director, cutter, updater
 from core.capture import ObsCapture, SimCapture
 
-APP_VERSION = 'v0.3.0'
+APP_VERSION = 'v0.3.1'
 PORT = 4795
 UPDATE = {'available': None, 'state': 'idle'}
 OUT_DIR = os.path.join(os.path.expanduser('~'), 'Videos', 'DirectorsCut')

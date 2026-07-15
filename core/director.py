@@ -37,7 +37,9 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
         note = getattr(capture, note_attr, None)
         if note and progress:
             progress(0, len(highlights), note)
-    prior_ui = sim.hide_ui() if hide_ui else None
+    # always pin the camera (disables the sim's auto-director so it can't
+    # wander off the target car mid-clip); optionally hide the UI too
+    prior_cam = sim.pin_camera(hide_ui)
     for i, h in enumerate(highlights):
         if stop_flag is not None and stop_flag():
             break
@@ -50,8 +52,12 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
         sim.seek_frame(frame)
         sim.wait_until_frame(frame)                      # seek is asynchronous
         time.sleep(0.5)
-        sim.watch(num_by_idx.get(h['caridx'], '0'), group)
-        time.sleep(0.8)
+        aimed = sim.watch(num_by_idx.get(h['caridx'], '0'), group,
+                          expect_caridx=h['caridx'])
+        if not aimed and progress:
+            progress(i, len(highlights),
+                     f"Camera may not be on the right car for: {h['label']}")
+        time.sleep(0.5)
 
         # never wait for a target past the end of the replay — playback
         # stops there and the wait would only time out
@@ -68,8 +74,7 @@ def record_highlights(sim, timeline, highlights, capture, drivers,
         elif progress:
             progress(i + 1, len(highlights), f"No video file for: {h['label']} — check the capture backend")
         time.sleep(1.0)
-    if hide_ui:
-        sim.restore_ui(prior_ui)
+    sim.restore_camera(prior_cam)
     capture.cleanup()
     if progress:
         progress(len(highlights), len(highlights), 'Recording complete')

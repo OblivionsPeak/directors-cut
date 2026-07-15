@@ -71,30 +71,47 @@ class Sim:
         return self.get('ReplaySessionTime')
 
     # ── cameras ──────────────────────────────────────────────────────────────
-    def hide_ui(self):
-        """Hide the sim's replay UI overlays for clean footage. Returns the
-        prior camera state so it can be restored."""
+    def watch(self, car_number, group, expect_caridx=None):
+        """Aim `group` at the car; verify the sim actually switched by reading
+        CamCarIdx back. Returns True when confirmed (or unverifiable)."""
+        import time as _t
+        for _ in range(2):
+            try:
+                self.ir.cam_switch_num(str(car_number), int(group), 0)
+            except Exception:
+                try:
+                    self.ir.cam_switch_pos(1, int(group), 0)
+                except Exception:
+                    pass
+            if expect_caridx is None:
+                return True
+            _t.sleep(0.5)
+            self.freeze()
+            if self.get('CamCarIdx') == expect_caridx:
+                return True
+        return False
+
+    def pin_camera(self, hide_ui):
+        """Camera state for recording: kill auto shot selection so the sim's
+        auto-director can't wander off the target car mid-clip; optionally
+        hide the UI. Returns prior state for restore()."""
         try:
-            prior = self.get('CamCameraState') or 0
-            self.ir.cam_set_state(int(prior) | irsdk.CameraState.ui_hidden)
+            prior = int(self.get('CamCameraState') or 0)
+            state = prior & ~irsdk.CameraState.use_auto_shot_selection
+            if hide_ui:
+                state |= irsdk.CameraState.ui_hidden
+            self.ir.cam_set_state(state)
             return prior
         except Exception:
             return None
 
-    def restore_ui(self, prior):
+    def restore_camera(self, prior):
         if prior is None:
             return
         try:
-            self.ir.cam_set_state(int(prior) & ~irsdk.CameraState.ui_hidden)
+            self.ir.cam_set_state(prior)
         except Exception:
             pass
-
-    def watch(self, car_number, group):
-        # cam_switch_num wants the car NUMBER string; falls back to position 1
-        try:
-            self.ir.cam_switch_num(str(car_number), int(group), 0)
-        except Exception:
-            self.ir.cam_switch_pos(1, int(group), 0)
 
     # ── video capture (built-in sim recorder) ────────────────────────────────
     def sim_capture_start(self):
